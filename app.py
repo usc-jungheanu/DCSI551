@@ -480,25 +480,25 @@ def get_spotify_embed_html(playlist_id):
 # Define a function to show the homepage with analytics or cool graphs
 def show_homepage():
     # Fetch genre data for both playlists
-    # todays_hits_genres = get_playlist_genres('37i9dQZF1DXcBWIGoYBM5M')
-    # new_music_genres = get_playlist_genres('37i9dQZF1DX4JAvHpjipBk')
+    todays_hits_genres = get_playlist_genres('37i9dQZF1DXcBWIGoYBM5M')
+    new_music_genres = get_playlist_genres('37i9dQZF1DX4JAvHpjipBk')
 
-    # # Create DataFrame for visualization
-    # genre_data = {
-    #     'Genre': [],
-    #     'Count': [],
-    #     'Playlist': []
-    # }
-    # for genre, count in todays_hits_genres.items():
-    #     genre_data['Genre'].append(genre)
-    #     genre_data['Count'].append(count)
-    #     genre_data['Playlist'].append("Today's Top Hits")
-    # for genre, count in new_music_genres.items():
-    #     genre_data['Genre'].append(genre)
-    #     genre_data['Count'].append(count)
-    #     genre_data['Playlist'].append("New Music")
+    # Create DataFrame for visualization
+    genre_data = {
+        'Genre': [],
+        'Count': [],
+        'Playlist': []
+    }
+    for genre, count in todays_hits_genres.items():
+        genre_data['Genre'].append(genre)
+        genre_data['Count'].append(count)
+        genre_data['Playlist'].append("Today's Top Hits")
+    for genre, count in new_music_genres.items():
+        genre_data['Genre'].append(genre)
+        genre_data['Count'].append(count)
+        genre_data['Playlist'].append("New Music")
 
-    # df = pd.DataFrame(genre_data)
+    df = pd.DataFrame(genre_data)
 
     # Spotify playlist selection
     col1, col2 = st.columns(2)
@@ -513,18 +513,18 @@ def show_homepage():
         new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
         st.markdown(new_music_playlist_html, unsafe_allow_html=True)
 
-    # # Display genre comparison chart
-    # st.markdown("### Genre Comparison Chart")
-    # chart = alt.Chart(df).mark_bar().encode(
-    #     x='Count:Q',
-    #     y='Genre:N',
-    #     color='Playlist:N',
-    #     tooltip=['Genre', 'Count', 'Playlist']
-    # ).properties(
-    #     width=700,
-    #     height=400
-    # )
-    # st.altair_chart(chart, use_container_width=True)
+    # Display genre comparison chart
+    st.markdown("### Genre Comparison Chart")
+    chart = alt.Chart(df).mark_bar().encode(
+        x='Count:Q',
+        y='Genre:N',
+        color='Playlist:N',
+        tooltip=['Genre', 'Count', 'Playlist']
+    ).properties(
+        width=700,
+        height=400
+    )
+    st.altair_chart(chart, use_container_width=True)
 
     # Additional components to add
 
