@@ -13,6 +13,7 @@ from streamlit_modal import Modal
 import pandas as pd
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+import concurrent.futures
 
 import streamlit.components.v1 as components
 from PIL import Image
@@ -445,69 +446,68 @@ sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_
 todays_top_hits_id = '37i9dQZF1DXcBWIGoYBM5M' 
 new_music_playlist_id = '37i9dQZF1DX4JAvHpjipBk'
 
-def get_playlist_tracks(playlist_id, limit=50):
-    tracks = []
-    results = sp.playlist_tracks(playlist_id, limit=limit)
-    while results and len(tracks) < limit:
-        tracks.extend(results['items'])
-        results = sp.next(results)
-    return tracks
+# def get_playlist_tracks(playlist_id, limit=50):
+#     tracks = []
+#     results = sp.playlist_tracks(playlist_id, limit=limit)
+#     while results and len(tracks) < limit:
+#         tracks.extend(results['items'])
+#         if len(tracks) >= limit:
+#             break
+#         results = sp.next(results)
+#     return tracks[:limit]
 
-# @st.cache_data(ttl=3600, max_entries=10)
-def get_artist_genres(artist_id):
-    artist_info = sp.artist(artist_id)
-    return artist_info['genres']
+# def fetch_artist_genres(artist_ids):
+#     """Fetch genres for a list of artist IDs using concurrent requests."""
+#     def fetch_genre(artist_id):
+#         return sp.artist(artist_id)['genres']
 
-# @st.cache_data(ttl=3600, max_entries=10, show_spinner=True)
-def get_playlist_genres(playlist_id):
-    tracks = get_playlist_tracks(playlist_id)
-    genre_count = {}
-    for track in tracks:
-        if track['track']:
-            artist_id = track['track']['artists'][0]['id']
-            genres = get_artist_genres(artist_id)
-            for genre in genres:
-                if genre in genre_count:
-                    genre_count[genre] += 1
-                else:
-                    genre_count[genre] = 1
-    return genre_count
+#     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+#         genre_lists = list(executor.map(fetch_genre, artist_ids))
+#     return genre_lists
 
-def get_spotify_embed_html(playlist_id):
-    return f'<iframe src="https://open.spotify.com/embed/playlist/{playlist_id}?utm_source=generator" width="100%" height="380" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>'
+# def get_playlist_genres(playlist_id, max_genres=None):
+#     tracks = get_playlist_tracks(playlist_id, limit=50)
+#     artist_ids = [track['track']['artists'][0]['id'] for track in tracks if track['track']]
+#     genre_lists = fetch_artist_genres(artist_ids)
 
+#     genre_count = {}
+#     for genres in genre_lists:
+#         for genre in genres:
+#             if genre in genre_count:
+#                 genre_count[genre] += 1
+#             else:
+#                 genre_count[genre] = 1
+#             if max_genres and len(genre_count) >= max_genres:
+#                 break
+#     return genre_count
 
-# Define a function to show the homepage with analytics or cool graphs
 def show_homepage():
     # Fetch genre data for both playlists
-    todays_hits_genres = get_playlist_genres('37i9dQZF1DXcBWIGoYBM5M')
-    new_music_genres = get_playlist_genres('37i9dQZF1DX4JAvHpjipBk')
+    # todays_hits_genres = get_playlist_genres('37i9dQZF1DXcBWIGoYBM5M', max_genres=10)
+    # new_music_genres = get_playlist_genres('37i9dQZF1DX4JAvHpjipBk', max_genres=10)
 
-    # Create DataFrame for visualization
-    genre_data = {
-        'Genre': [],
-        'Count': [],
-        'Playlist': []
-    }
-    for genre, count in todays_hits_genres.items():
-        genre_data['Genre'].append(genre)
-        genre_data['Count'].append(count)
-        genre_data['Playlist'].append("Today's Top Hits")
-    for genre, count in new_music_genres.items():
-        genre_data['Genre'].append(genre)
-        genre_data['Count'].append(count)
-        genre_data['Playlist'].append("New Music")
+    # # Create DataFrame for visualization
+    # genre_data = {
+    #     'Genre': [],
+    #     'Count': [],
+    #     'Playlist': []
+    # }
+    # for genre, count in todays_hits_genres.items():
+    #     genre_data['Genre'].append(genre)
+    #     genre_data['Count'].append(count)
+    #     genre_data['Playlist'].append("Today's Top Hits")
+    # for genre, count in new_music_genres.items():
+    #     genre_data['Genre'].append(genre)
+    #     genre_data['Count'].append(count)
+    #     genre_data['Playlist'].append("New Music")
 
-    df = pd.DataFrame(genre_data)
+    # df = pd.DataFrame(genre_data).sort_values(by='Count', ascending=False).head(10)  # Limit to top 10 genres
 
-    # Spotify playlist selection
     col1, col2 = st.columns(2)
-
     with col1:
         st.header("Today's Top Hits")
         todays_top_hits_html = get_spotify_embed_html('37i9dQZF1DXcBWIGoYBM5M')
         st.markdown(todays_top_hits_html, unsafe_allow_html=True)
-
     with col2:
         st.header("New Music Playlist")
         new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
@@ -525,6 +525,10 @@ def show_homepage():
         height=400
     )
     st.altair_chart(chart, use_container_width=True)
+
+def get_spotify_embed_html(playlist_id):
+    return f'<iframe src="https://open.spotify.com/embed/playlist/{playlist_id}?utm_source=generator" width="100%" height="380" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>'
+
 
     # Additional components to add
 
