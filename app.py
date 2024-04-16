@@ -676,15 +676,19 @@ def show_playlists(user_id):
     playlists = get_playlists_from_db(user_id)
     selected_playlist_name = st.selectbox('Select a playlist:', [playlist[1] for playlist in playlists])
 
+    # Initialize modals outside the loop to ensure they are accessible
+    remove_modal = None
+    delete_modal = Modal("SQL for Deleting Playlist", key=f"delete_playlist_modal")
+
     if selected_playlist_name:
         selected_playlist_id = next(playlist[0] for playlist in playlists if playlist[1] == selected_playlist_name)
         songs = get_songs_from_playlist(selected_playlist_id)
         
         for song in songs:
-            song_id = song[0]  # Adjust the index as per your database structure
+            song_id = song[0]
             song_name = song[1]
             artist_name = song[2]
-            preview_url = song[5]  # Assuming the preview URL is at index 5
+            preview_url = song[5]
 
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
@@ -692,32 +696,29 @@ def show_playlists(user_id):
                 if preview_url:
                     st.audio(preview_url)
             with col3:
-                with st.container():
-                    # This container groups the Remove and Modify buttons
-                    remove_key = f"remove_{song_id}"
-                    modify_key = f"modify_{song_id}"
-                    if st.button("Remove", key=remove_key):
-                        remove_song_from_playlist(song_id, selected_playlist_id)
-                        st.rerun()
-                    if st.button("Modify", key=modify_key, on_click=modify_song, args=(song_id,)):
-                        pass
-
-                    if st.session_state.get(modify_key, False):
-                        with st.form(f"modify_form_{song_id}"):
-                            new_name = st.text_input("Song Name", value=song_name, key=f"new_name_{song_id}")
-                            new_artist = st.text_input("Artist", value=artist_name, key=f"new_artist_{song_id}")
-                            submitted = st.form_submit_button("Submit Changes")
-                            if submitted:
-                                update_song_in_database(song_id, new_name, new_artist)
-                                st.session_state[modify_key] = False
+                # Define a unique key for each modal based on song ID
+                remove_modal_key = f"remove_song_modal_{song_id}"
+                remove_modal = Modal("SQL for Song Removal", key=remove_modal_key)
+                if st.button("Remove", key=f"remove_{song_id}"):
+                    sql_command, success = remove_song_from_playlist(song_id, selected_playlist_id)
+                    if success:
+                        st.session_state['sql_command'] = sql_command
+                        remove_modal.open()
 
             st.markdown("---")  # Adds a horizontal line after each song
 
-        delete_confirmation = st.checkbox("Confirm playlist deletion", key=f"confirm_delete_{selected_playlist_id}")
-        if st.button("Delete Playlist", key=f"delete_{selected_playlist_id}") and delete_confirmation:
-            delete_playlist(selected_playlist_id)
-            st.experimental_rerun()
+        if st.button("Delete Playlist", key=f"delete_{selected_playlist_id}"):
+            sql_command = delete_playlist(selected_playlist_id)
+            with st.expander("See SQL"):
+                st.code(sql_command)
 
+    # Render modals outside the loop or conditional blocks
+    if remove_modal and remove_modal.is_open():
+        with remove_modal.container():
+            st.code(st.session_state.get('sql_command', ''))
+    if delete_modal.is_open():
+        with delete_modal.container():
+            st.code(st.session_state.get('sql_command', ''))
 
 
 def update_song_in_db(song_id, new_name, new_artist, new_album, new_release_date):
@@ -744,57 +745,53 @@ def remove_song_from_playlist(song_id, playlist_id):
     if db_connection:
         try:
             cursor = db_connection.cursor()
-            cursor.execute("DELETE FROM songs WHERE song_id = %s AND playlist_id = %s", (song_id, playlist_id))
+            delete_query = f"DELETE FROM songs WHERE song_id = {song_id} AND playlist_id = {playlist_id};"
+            cursor.execute(delete_query)
             db_connection.commit()
-            st.success("Song removed successfully!")
+            return delete_query, True  # Return the SQL command executed and success status
         except mysql.connector.Error as e:
             st.error(f"Database error: {e}")
+            return f"Database error: {e}", False  # Return the error message and failure status
         finally:
             cursor.close()
             db_connection.close()
+    else:
+        return "Failed to connect to database.", False  # Return the failure message and status
 
 
 def delete_playlist(playlist_id):
     db_connection = connect_to_mysql_db2()
-    executed_commands = []  # To store SQL commands for display
-
     if db_connection:
         try:
             cursor = db_connection.cursor()
+            sql_commands = ""
 
             # Delete all songs from this playlist first
-            delete_songs_query = "DELETE FROM songs WHERE playlist_id = %s"
-            cursor.execute(delete_songs_query, (playlist_id,))
-            executed_commands.append(cursor.statement)  # Save the executed SQL command
+            delete_songs_query = f"DELETE FROM songs WHERE playlist_id = {playlist_id};"
+            cursor.execute(delete_songs_query)
+            sql_commands += "Executed: " + delete_songs_query + "\n"
 
             # Now, delete the playlist itself
-            delete_playlist_query = "DELETE FROM playlists WHERE playlist_id = %s"
-            cursor.execute(delete_playlist_query, (playlist_id,))
-            executed_commands.append(cursor.statement)  # Save the executed SQL command
+            delete_playlist_query = f"DELETE FROM playlists WHERE playlist_id = {playlist_id};"
+            cursor.execute(delete_playlist_query)
+            sql_commands += "Executed: " + delete_playlist_query
 
             db_connection.commit()
-
-            # Close cursor and connection
             cursor.close()
             db_connection.close()
 
-            # Store commands and trigger the modal
-            st.session_state['executed_commands'] = executed_commands
-            st.session_state['delete_modal'] = True
-
-            # Optionally, here you can set a flag to rerun if necessary
-            # st.experimental_rerun()
+            return sql_commands
 
         except mysql.connector.Error as e:
             st.error(f"Database error: {e}")
-            cursor.close()
-            db_connection.close()
-        except Exception as e:
-            st.error(f"Unexpected error: {e}")
-            cursor.close()
-            db_connection.close()
+            return "Error in executing SQL commands."
+        finally:
+            if cursor:
+                cursor.close()
+            if db_connection:
+                db_connection.close()
     else:
-        st.error("Failed to connect to database.")
+        return "Failed to connect to database."
 
 
 
@@ -882,27 +879,6 @@ def get_last_inserted_playlist_id():
     finally:
         cursor.close()
         close_mysql_connection(db_connection)
-
-
-
-def fetch_user_playlists():
-    # Simulated fetching of user playlists for the purpose of this app
-    # This replaces the attempt to fetch real Spotify user playlists
-    # You can replace this with actual database retrieval if you implement persistent storage
-    simulated_playlists = ['Workout Hits', 'Study Session', 'Party Mix', 'Relaxing Moods']
-    return simulated_playlists
-
-def display_user_playlists():
-    user_playlists = fetch_user_playlists()
-    if user_playlists:
-        # Insert a horizontal line for visual separation
-        st.sidebar.write("----")  
-        # st.sidebar.header("Your Playlists")
-        # selected_playlist = st.sidebar.selectbox("Select Playlist", user_playlists, key='playlist_selectbox')
-        # # Rest of the code to handle selected playlist
-    else:
-        st.sidebar.write("No playlists found.")
-
 
 def update_song_in_database(song_id, new_name, new_artist):
     # Connect to the database
