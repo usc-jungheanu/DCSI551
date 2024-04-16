@@ -513,18 +513,18 @@ def show_homepage():
         new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
         st.markdown(new_music_playlist_html, unsafe_allow_html=True)
 
-    # Display genre comparison chart
-    st.markdown("### Genre Comparison Chart")
-    chart = alt.Chart(df).mark_bar().encode(
-        x='Count:Q',
-        y='Genre:N',
-        color='Playlist:N',
-        tooltip=['Genre', 'Count', 'Playlist']
-    ).properties(
-        width=700,
-        height=400
-    )
-    st.altair_chart(chart, use_container_width=True)
+    # # Display genre comparison chart
+    # st.markdown("### Genre Comparison Chart")
+    # chart = alt.Chart(df).mark_bar().encode(
+    #     x='Count:Q',
+    #     y='Genre:N',
+    #     color='Playlist:N',
+    #     tooltip=['Genre', 'Count', 'Playlist']
+    # ).properties(
+    #     width=700,
+    #     height=400
+    # )
+    # st.altair_chart(chart, use_container_width=True)
 
 def get_spotify_embed_html(playlist_id):
     return f'<iframe src="https://open.spotify.com/embed/playlist/{playlist_id}?utm_source=generator" width="100%" height="380" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>'
