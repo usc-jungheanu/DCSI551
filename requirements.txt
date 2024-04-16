@@ -1,0 +1,13 @@
+streamlit
+streamlit_option_menu
+streamlit_modal
+scikit-learn
+streamlit-authenticator
+PyYAML
+mysql-connector-python
+bcrypt
+pandas
+spotipy
+networkx
+matplot
+altair
