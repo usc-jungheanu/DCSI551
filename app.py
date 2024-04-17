@@ -724,42 +724,82 @@ def display_spotify_search_results(search_keyword):
         st.write("No results found.")
 
 
+def run_sql_query(sql_query):
+    # Use the existing database connection function
+    db_connection = connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor(dictionary=True)  # Fetch rows as dictionaries
+            cursor.execute(sql_query)
+            result = cursor.fetchall()  # Fetch all results
+            if not result:
+                st.error("Query executed successfully but no data was returned.")
+            return pd.DataFrame(result)
+        except mysql.connector.Error as e:
+            st.error(f"Database error: {e}")
+            return pd.DataFrame()  # Return empty DataFrame on error
+        finally:
+            cursor.close()
+            close_mysql_connection(db_connection)
+    else:
+        st.error("Failed to connect to database.")
+        return pd.DataFrame()  # Return empty DataFrame if connection failed
+
 def show_playlists(user_id):
     playlists = get_playlists_from_db(user_id)
-    selected_playlist_name = st.selectbox('Select a playlist:', [playlist[1] for playlist in playlists])
+    tab1, tab2 = st.tabs(["My Playlists", "All Songs"])
 
-    if selected_playlist_name:
-        selected_playlist_id = next(playlist[0] for playlist in playlists if playlist[1] == selected_playlist_name)
-        songs = get_songs_from_playlist(selected_playlist_id)
-        
-        for song in songs:
-            song_id = song[0]
-            song_name = song[1]
-            artist_name = song[2]
-            preview_url = song[5]
+    with tab1:
+        selected_playlist_name = st.selectbox('Select a playlist:', [playlist[1] for playlist in playlists])
 
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.text(f"{song_name} - {artist_name}")
-                if preview_url:
-                    st.audio(preview_url)
-            with col3:
-                if st.button("Remove", key=f"remove_{song_id}"):
-                    sql_command, success = remove_song_from_playlist(song_id, selected_playlist_id)
-                    if success:
-                        with st.popover("See SQL"):
-                            st.code(sql_command)
-                        st.success("Song removed successfully!")
-                    else:
-                        st.error("Failed to remove song.")
+        if selected_playlist_name:
+            selected_playlist_id = next(playlist[0] for playlist in playlists if playlist[1] == selected_playlist_name)
+            songs = get_songs_from_playlist(selected_playlist_id)
 
-            st.markdown("---")  # Adds a horizontal line after each song
+            for song in songs:
+                song_id = song[0]
+                song_name = song[1]
+                artist_name = song[2]
+                preview_url = song[5]
 
-        if st.button("Delete Playlist", key=f"delete_{selected_playlist_id}"):
-            sql_command = delete_playlist(selected_playlist_id)
-            with st.expander("See SQL"):
-                st.code(sql_command)
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.text(f"{song_name} - {artist_name}")
+                    if preview_url:
+                        st.audio(preview_url)
+                with col3:
+                    if st.button("Remove", key=f"remove_{song_id}"):
+                        sql_command, success = remove_song_from_playlist(song_id, selected_playlist_id)
+                        if success:
+                            st.success("Song removed successfully!")
+                            with st.popover("See SQL"):
+                                st.code(sql_command)
+                        else:
+                            st.error("Failed to remove song.")
 
+                st.markdown("---")  # Adds a horizontal line after each song
+
+            if st.button("Delete Playlist", key=f"delete_{selected_playlist_id}"):
+                sql_command = delete_playlist(selected_playlist_id)
+                with st.expander("See SQL"):
+                    st.code(sql_command)
+
+    with tab2:
+        sql_query = """
+        SELECT u.username AS Username, s.name AS Song_Name, s.artist AS Artist, s.album AS Album, 
+               s.release_date AS Release_Date, pl.playlist_Name, pl.created_at AS Playlist_Created_On
+        FROM TuneSyncCustomers.songs s
+        JOIN TuneSyncCustomers.playlists pl ON pl.playlist_id = s.playlist_id
+        JOIN TuneSyncCustomers.users u ON u.user_id = pl.user_id;
+        """
+        result_df = run_sql_query(sql_query)
+        if not result_df.empty:
+            st.dataframe(result_df)
+        else:
+            st.write("No data to display.")
+
+        with st.expander("See SQL"):
+            st.code(sql_query)
 
 
 def update_song_in_db(song_id, new_name, new_artist, new_album, new_release_date):
@@ -1168,9 +1208,5 @@ else:
         login_user()
     elif st.session_state['page'] == 'Create Account':
         create_account()
-    # elif st.session_state['page'] == 'Forgot Password':
-    #     forgot_password()
-    # elif st.session_state['page'] == 'Reset Password':
-    #     reset_password()
 
 
