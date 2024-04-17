@@ -1544,7 +1544,7 @@ def render_sidebar():
 
             # Admin tools
             if usertype == 'admin':
-                options = ["Homepage", "Systems", "Profile", "Logout"]
+                options = ["Homepage", "Settings", "Profile", "Logout"]
             # User features
             elif usertype == 'customer':
                 options = ["Homepage", "My Playlists", "Search Music", "Profile", "Logout"]
@@ -1573,7 +1573,7 @@ render_sidebar()
 if st.session_state.get('authentication_status'):
     if st.session_state['page'] == 'Homepage':
         show_homepage()
-    if st.session_state['page'] == 'Systems' and st.session_state['user_info']['usertype'] == 'admin':
+    if st.session_state['page'] == 'Settings' and st.session_state['user_info']['usertype'] == 'admin':
         manage_playlists_and_users()
         pass
     # elif st.session_state['page'] == 'Systems' and st.session_state['user_info']['usertype'] == 'admin':
