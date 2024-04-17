@@ -15,7 +15,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import concurrent.futures
 from collections import defaultdict
-
+import hashlib
 import random
 import streamlit.components.v1 as components
 from PIL import Image
@@ -35,7 +35,8 @@ def modify_song(song_id):
     st.session_state[f'modify_{song_id}'] = True
 
 
-## DB Setup ####
+##################   DATABASE SETUP & MANAGEMENT   ########################
+
 
 # MySQL Connection for DB1 "TuneSyncAdmin":
 def connect_to_mysql_db1():
@@ -84,30 +85,76 @@ def hash_password(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
 
-# Function to insert a new user into the correct database based on their email domain
+def hash_email(email):
+    if '@' in email:
+        _, domain = email.split('@', 1)
+        domain = domain.lower()  # Normalize the domain to lowercase for consistency
+        hasher = hashlib.sha256()
+        hasher.update(domain.encode('utf-8'))
+        domain_hash_hex = hasher.hexdigest()
+        tunesync_hash_hex = hashlib.sha256('tunesync.com'.encode('utf-8')).hexdigest()
+        if domain_hash_hex == tunesync_hash_hex:
+            return 'db1'
+        else:
+            return 'db2'
+    else:
+        return None  # Handle the case where the email format is incorrect
+
+
+# # Function to insert a new user into the correct database based on their email domain
+# def insert_user(username, password, email):
+#     hashed_password = hash_password(password).decode('utf-8')  # Make sure to hash the password
+#     usertype = "admin" if email.endswith("@tunesync.com") else "customer"
+
+#     # Decide which database to use based on email domain
+#     db_connection = connect_to_mysql_db1() if usertype == "admin" else connect_to_mysql_db2()
+    
+#     if db_connection is not None:
+#         try:
+#             cursor = db_connection.cursor()
+#             insert_query = """
+#                 INSERT INTO users (username, password, email, usertype, created_at)
+#                 VALUES (%s, %s, %s, %s, NOW())
+#             """
+#             # Execute the insert operation
+#             cursor.execute(insert_query, (username, hashed_password, email, usertype))
+#             db_connection.commit()  # Don't forget to commit the transaction
+#             print(f"User created successfully as {usertype}")  # Or use st.success() if using Streamlit
+#         except mysql.connector.Error as e:
+#             print(f"Error inserting user into database: {e}")  # Or use st.error()
+#         finally:
+#             cursor.close()
+#             db_connection.close()
+
+
 def insert_user(username, password, email):
     hashed_password = hash_password(password).decode('utf-8')  # Make sure to hash the password
-    usertype = "admin" if email.endswith("@tunesync.com") else "customer"
+    database_key = hash_email(email)
 
-    # Decide which database to use based on email domain
-    db_connection = connect_to_mysql_db1() if usertype == "admin" else connect_to_mysql_db2()
-    
+    if database_key == 'db1':
+        db_connection = connect_to_mysql_db1()
+    elif database_key == 'db2':
+        db_connection = connect_to_mysql_db2()
+    else:
+        return False, "Invalid email format."
+
     if db_connection is not None:
         try:
             cursor = db_connection.cursor()
             insert_query = """
                 INSERT INTO users (username, password, email, usertype, created_at)
-                VALUES (%s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, 'customer', NOW())
             """
-            # Execute the insert operation
-            cursor.execute(insert_query, (username, hashed_password, email, usertype))
-            db_connection.commit()  # Don't forget to commit the transaction
-            print(f"User created successfully as {usertype}")  # Or use st.success() if using Streamlit
+            cursor.execute(insert_query, (username, hashed_password, email))
+            db_connection.commit()
+            return True, "User created successfully."
         except mysql.connector.Error as e:
-            print(f"Error inserting user into database: {e}")  # Or use st.error()
+            return False, f"Error inserting user into database: {e}"
         finally:
             cursor.close()
             db_connection.close()
+    else:
+        return False, "Database connection failed."
 
 
 # authenticate user for password reset / forgot password
@@ -1003,7 +1050,24 @@ def create_account():
                 hashed_password = hash_password(new_password).decode('utf-8')  # Hash the password
                 usertype = "admin" if new_email.endswith("@tunesync.com") else "customer"
                 # Use st.echo to display the block of code executed within this context
-                with st.echo():    
+                code = ''' 
+                def hash_email(email):
+                    if '@' in email:
+                        _, domain = email.split('@', 1)
+                        domain = domain.lower()  # Normalize the domain to lowercase
+                        hasher = hashlib.sha256()
+                        hasher.update(domain.encode('utf-8'))
+                        domain_hash_hex = hasher.hexdigest()
+                        tunesync_hash_hex = hashlib.sha256('tunesync.com'.encode('utf-8')).hexdigest()
+                        if domain_hash_hex == tunesync_hash_hex:
+                            return 'db1'
+                        else:
+                            return 'db2'
+                    else:
+                        return None  # Handles incorrect formatting
+                '''   
+                st.code(code, language='python')
+                with st.echo(): 
                     if new_email.endswith("@tunesync.com"):
                         db_connection = connect_to_mysql_db1()
                         db_type = "TuneSyncAdmin (DB1)"
