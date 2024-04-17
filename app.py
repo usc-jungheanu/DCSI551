@@ -435,6 +435,24 @@ def manage_users():
         user_crud("admin")
 
 
+def create_playlist_admin(playlist_name, user_id, user_type):
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            insert_query = "INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)"
+            cursor.execute(insert_query, (playlist_name, user_id))
+            db_connection.commit()
+            return cursor.statement  # Return the SQL command directly
+        except mysql.connector.Error as e:
+            return f"Database error: {e}"  # Optionally return the error message
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        return "Failed to connect to database."  # Connection failure message
+
+
 def playlist_crud(user_type):
     st.subheader(f"Manage Playlists for {user_type.title()}s")
     users = fetch_users_by_type(user_type)  # Fetch users by type (customer or admin)
@@ -450,13 +468,17 @@ def playlist_crud(user_type):
         if operation == 'Create':
             playlist_name = st.text_input('Playlist Name', key=f"{user_type}_create_playlist_name")
             if st.button('Create Playlist', key=f"{user_type}_create_playlist_button"):
-                create_result, sql_command = create_playlist(playlist_name, user_id, user_type)
-                if create_result:
-                    st.success('Playlist created!')
+                # Use the admin function to get the SQL command for display
+                sql_command = create_playlist_admin(playlist_name, user_id, user_type)
+                # Use the original function to perform the operation and get a user-friendly message
+                user_message = create_playlist(playlist_name, user_id, user_type)
+                
+                if "successfully" in user_message:
+                    st.success(user_message)
                     with st.expander("See SQL Command"):
                         st.code(sql_command)
                 else:
-                    st.error("Failed to create playlist.")
+                    st.error(user_message) # This displays the error message returned from create_playlist
 
         elif operation == 'View':
             if playlists:
@@ -526,20 +548,20 @@ def fetch_users_from_db2():
     return []
 
 
-
-
 def user_crud(user_type):
-    st.subheader("Manage Users")
-    option = st.selectbox("Select Operation", ["Create", "View", "Update", "Delete"])
-
+    st.subheader(f"Manage Users for {user_type.title()}")
+    options = ["Create", "View", "Update", "Delete"]
+    # Append user_type to the key to ensure uniqueness
+    option = st.selectbox("Select Operation", options, key=f"operation_{user_type}")
+    
     if option == "Create":
-        username = st.text_input("Username")
-        email = st.text_input("Email")
-        password = st.text_input("Password", type='password')
-        if st.button("Create User"):
-            with st.spinner("Creating User..."):
-                create_user(username, email, password)
-                st.success(f"User '{username}' created!")
+        username = st.text_input("Username", key=f"username_create_{user_type}")
+        email = st.text_input("Email", key=f"email_create_{user_type}")
+        password = st.text_input("Password", type='password', key=f"password_create_{user_type}")
+        if st.button("Create User", key=f"create_user_button_{user_type}"):
+            # Assume create_user is a function to create a user
+            create_user(username, email, password, user_type)
+            st.success(f"User '{username}' created!")
 
     elif option == "View":
         with st.spinner("Fetching Users..."):
@@ -547,19 +569,19 @@ def user_crud(user_type):
             st.write(pd.DataFrame(users, columns=['User ID', 'Username', 'Email', 'Role']))
 
     elif option == "Update":
-        user_id = st.text_input("User ID to Update")
-        new_email = st.text_input("New Email")
-        if st.button("Update User"):
-            with st.spinner("Updating User..."):
-                update_user(user_id, new_email)
-                st.success(f"User ID {user_id} updated!")
-
+        user_id = st.text_input("User ID to Update", key=f"user_id_update_{user_type}")
+        new_email = st.text_input("New Email", key=f"new_email_update_{user_type}")
+        if st.button("Update User", key=f"update_user_button_{user_type}"):
+            # Assume update_user is a function to update user details
+            update_user(user_id, new_email, user_type)
+            st.success(f"User ID {user_id} updated!")
+    
     elif option == "Delete":
-        user_id = st.text_input("User ID to Delete")
-        if st.button("Delete User"):
-            with st.spinner("Deleting User..."):
-                delete_user(user_id)
-                st.success(f"User ID {user_id} deleted!")
+        user_id = st.text_input("User ID to Delete", key=f"user_id_delete_{user_type}")
+        if st.button("Delete User", key=f"delete_user_button_{user_type}"):
+            # Assume delete_user is a function to delete a user
+            delete_user(user_id, user_type)
+            st.success(f"User ID {user_id} deleted!")
 
 
 def fetch_all_users():
@@ -915,15 +937,16 @@ def create_playlist(playlist_name, user_id, user_type):
             insert_query = "INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)"
             cursor.execute(insert_query, (playlist_name, user_id))
             db_connection.commit()
-            return True, "Playlist created successfully."
+            sql_command = cursor.statement
+            return "Playlist created successfully."
         except mysql.connector.Error as e:
             st.error(f"Database error: {e}")
-            return False, ""  # Return failure and empty SQL command
+            return  ""  # Return failure and empty SQL command
         finally:
             cursor.close()
             db_connection.close()
     else:
-        return False, "Failed to connect to database."
+        return "Failed to connect to database."
 
 
 
@@ -1082,7 +1105,8 @@ def show_playlists(user_id):
         """
         result_df = run_sql_query(sql_query)
         if not result_df.empty:
-            st.dataframe(result_df)
+            st.dataframe(result_df.set_index(result_df.columns[0]))
+            # st.table(result_df)
         else:
             st.write("No data to display.")
 
