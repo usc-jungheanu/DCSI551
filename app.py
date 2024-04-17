@@ -14,7 +14,9 @@ import pandas as pd
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import concurrent.futures
+from collections import defaultdict
 
+import random
 import streamlit.components.v1 as components
 from PIL import Image
 import altair as alt
@@ -430,9 +432,6 @@ def delete_user(user_id, db_connection):
         cursor.close()
 
 
-
-
-
 ######## SPOTIFY API CONFIGURATION AND SEARCH FUNCTION IMPLEMENTATION ###########
 
 # Spotify Credentials
@@ -446,89 +445,147 @@ sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_
 todays_top_hits_id = '37i9dQZF1DXcBWIGoYBM5M' 
 new_music_playlist_id = '37i9dQZF1DX4JAvHpjipBk'
 
-# def get_playlist_tracks(playlist_id, limit=50):
-#     tracks = []
-#     results = sp.playlist_tracks(playlist_id, limit=limit)
-#     while results and len(tracks) < limit:
-#         tracks.extend(results['items'])
-#         if len(tracks) >= limit:
-#             break
-#         results = sp.next(results)
-#     return tracks[:limit]
 
-# def fetch_artist_genres(artist_ids):
-#     """Fetch genres for a list of artist IDs using concurrent requests."""
-#     def fetch_genre(artist_id):
-#         return sp.artist(artist_id)['genres']
+ # Function to get audio features and classify moods
+def get_audio_features_for_playlist(playlist_id):
+    track_ids = [track['track']['id'] for track in sp.playlist_tracks(playlist_id)['items'] if track['track']]
+    features = sp.audio_features(track_ids)
+    return features
 
-#     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-#         genre_lists = list(executor.map(fetch_genre, artist_ids))
-#     return genre_lists
+def classify_moods(features):
+    mood_counts = {'Energetic': 0, 'Calm': 0, 'Sad': 0, 'Happy': 0}
+    for feature in features:
+        if feature:
+            if feature['energy'] > 0.7 and feature['valence'] > 0.5:
+                mood_counts['Energetic'] += 1
+            elif feature['energy'] < 0.4 and feature['valence'] < 0.5:
+                mood_counts['Calm'] += 1
+            elif feature['valence'] < 0.3:
+                mood_counts['Sad'] += 1
+            else:
+                mood_counts['Happy'] += 1
+    return mood_counts
 
-# def get_playlist_genres(playlist_id, max_genres=None):
-#     tracks = get_playlist_tracks(playlist_id, limit=50)
-#     artist_ids = [track['track']['artists'][0]['id'] for track in tracks if track['track']]
-#     genre_lists = fetch_artist_genres(artist_ids)
+def create_mood_chart(mood_counts):
+    mood_df = pd.DataFrame(list(mood_counts.items()), columns=['Mood', 'Count'])
+    return alt.Chart(mood_df).mark_bar().encode(
+        x='Mood:N',
+        y='Count:Q',
+        color='Mood:N',
+        tooltip=['Mood', 'Count']
+    )
 
-#     genre_count = {}
-#     for genres in genre_lists:
-#         for genre in genres:
-#             if genre in genre_count:
-#                 genre_count[genre] += 1
-#             else:
-#                 genre_count[genre] = 1
-#             if max_genres and len(genre_count) >= max_genres:
-#                 break
-#     return genre_count
 
-def show_homepage():
-    # Fetch genre data for both playlists
-    # todays_hits_genres = get_playlist_genres('37i9dQZF1DXcBWIGoYBM5M', max_genres=10)
-    # new_music_genres = get_playlist_genres('37i9dQZF1DX4JAvHpjipBk', max_genres=10)
+def get_playlist_tracks(playlist_id):
+    tracks = []
+    results = sp.playlist_items(playlist_id)
+    while results:
+        tracks.extend(results['items'])
+        results = sp.next(results)
+    return tracks
 
-    # # Create DataFrame for visualization
-    # genre_data = {
-    #     'Genre': [],
-    #     'Count': [],
-    #     'Playlist': []
-    # }
-    # for genre, count in todays_hits_genres.items():
-    #     genre_data['Genre'].append(genre)
-    #     genre_data['Count'].append(count)
-    #     genre_data['Playlist'].append("Today's Top Hits")
-    # for genre, count in new_music_genres.items():
-    #     genre_data['Genre'].append(genre)
-    #     genre_data['Count'].append(count)
-    #     genre_data['Playlist'].append("New Music")
+def get_genre_counts(tracks):
+    genre_count = defaultdict(int)
+    artist_ids = set()
+    for item in tracks:
+        track = item.get('track')
+        if track:
+            for artist in track['artists']:
+                artist_ids.add(artist['id'])
 
-    # df = pd.DataFrame(genre_data).sort_values(by='Count', ascending=False).head(10)  # Limit to top 10 genres
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.header("Today's Top Hits")
-        todays_top_hits_html = get_spotify_embed_html('37i9dQZF1DXcBWIGoYBM5M')
-        st.markdown(todays_top_hits_html, unsafe_allow_html=True)
-    with col2:
-        st.header("New Music Playlist")
-        new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
-        st.markdown(new_music_playlist_html, unsafe_allow_html=True)
-
-    # # Display genre comparison chart
-    # st.markdown("### Genre Comparison Chart")
-    # chart = alt.Chart(df).mark_bar().encode(
-    #     x='Count:Q',
-    #     y='Genre:N',
-    #     color='Playlist:N',
-    #     tooltip=['Genre', 'Count', 'Playlist']
-    # ).properties(
-    #     width=700,
-    #     height=400
-    # )
-    # st.altair_chart(chart, use_container_width=True)
+    # Fetch genres in batches to minimize API calls
+    artist_ids = list(artist_ids)
+    for i in range(0, len(artist_ids), 50):  # Spotify API allows up to 50 ids per request
+        artists = sp.artists(artist_ids[i:i+50])['artists']
+        for artist in artists:
+            for genre in artist['genres']:
+                genre_count[genre] += 1
+    return genre_count
 
 def get_spotify_embed_html(playlist_id):
     return f'<iframe src="https://open.spotify.com/embed/playlist/{playlist_id}?utm_source=generator" width="100%" height="380" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>'
 
+def show_homepage():
+    st.title("Playlist Dashboard")
+
+    # Simulate real-time listener count
+    listener_count_today_hits = random.randint(25000, 75000)
+    listener_count_new_music = random.randint(5000, 10000)
+
+    # Setup for "Today's Top Hits"
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"<h3 style='font-size: 22px;'>Today's Top Hits ({listener_count_today_hits} Active Users)</h3>", unsafe_allow_html=True)
+
+        todays_top_hits_html = get_spotify_embed_html('37i9dQZF1DXcBWIGoYBM5M')
+        st.markdown(todays_top_hits_html, unsafe_allow_html=True)
+
+    features_today_hits = get_audio_features_for_playlist('37i9dQZF1DXcBWIGoYBM5M')
+    mood_counts_today_hits = classify_moods(features_today_hits)
+    chart_today_hits = create_mood_chart(mood_counts_today_hits)
+
+    with col2:
+        st.write('\n\n')
+        st.write('\n\n') 
+        st.write('\n\n')
+        st.write('\n\n')   
+        st.write('\n\n')
+        st.write('\n\n')
+        st.write('\n\n')
+        st.altair_chart(chart_today_hits, use_container_width=True)
+
+    # Setup for "New Music Playlist"
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown(f"<h3 style='font-size: 22px;'>New Music Playlist ({listener_count_new_music} Active Users)</h3>", unsafe_allow_html=True)
+        new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
+        st.markdown(new_music_playlist_html, unsafe_allow_html=True)
+
+    features_new_music = get_audio_features_for_playlist('37i9dQZF1DX4JAvHpjipBk')
+    mood_counts_new_music = classify_moods(features_new_music)
+    chart_new_music = create_mood_chart(mood_counts_new_music)
+
+    with col4:
+        st.write('\n\n')
+        st.write('\n\n') 
+        st.write('\n\n')
+        st.write('\n\n')   
+        st.write('\n\n')
+        st.write('\n\n')
+        st.write('\n\n')
+        st.altair_chart(chart_new_music, use_container_width=True)
+        
+# Add some space before the chart
+    st.write('\n\n')  
+
+    # Playlist IDs
+    playlists = {
+        "Today's Top Hits": '37i9dQZF1DXcBWIGoYBM5M',
+        "New Music": '37i9dQZF1DX4JAvHpjipBk'
+    }
+
+    # Fetch and process data
+    data = []
+    for name, playlist_id in playlists.items():
+        tracks = get_playlist_tracks(playlist_id)
+        genre_counts = get_genre_counts(tracks)
+        for genre, count in genre_counts.items():
+            data.append({'Playlist': name, 'Genre': genre, 'Count': count})
+
+    # Data visualization
+    df = pd.DataFrame(data)
+    if not df.empty:
+        chart = alt.Chart(df).mark_bar().encode(
+            y='Count:Q',
+            x='Genre:N',
+            color='Playlist:N',
+            tooltip=['Genre', 'Count', 'Playlist']
+        ).properties(width=700, 
+                     height=500,
+                     title='Genre Distribution Across Playlists')
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.write("No data available.")
 
     # Additional components to add
 
@@ -620,7 +677,6 @@ def display_spotify_search_results(search_keyword):
                         key=f"playlist_select_{index}"
                     )
                     
-                    # Variables to capture the song data
                     song_data = {
                         'Name': row['Name'],
                         'Artist': row['Artist'],
@@ -631,7 +687,6 @@ def display_spotify_search_results(search_keyword):
                         'Track ID': row.get('Track ID')
                     }
                     
-                    # Handle Create New Playlist
                     if playlist_choice == "Create New Playlist":
                         new_playlist_name = st.text_input("New Playlist Name", key=f"new_playlist_{index}")
                         create_button_pressed = st.button("Create Playlist", key=f"create_playlist_button_{index}")
@@ -639,13 +694,11 @@ def display_spotify_search_results(search_keyword):
                             error_message = create_playlist(new_playlist_name, st.session_state['user_info']['user_id'])
                             if error_message == "Playlist created successfully.":
                                 st.success(error_message)
-                                # Here we just need to open the modal and set the SQL command
                                 st.session_state['sql_command'] = f"INSERT INTO playlists (playlist_name, user_id) VALUES ('{new_playlist_name}', '{st.session_state['user_info']['user_id']}');"
                                 create_modal.open()
                             else:
                                 st.error(error_message) 
 
-                    # Handle Add Song to Playlist
                     elif playlist_choice: 
                         playlist_id = next((p[0] for p in playlist_options if p[1] == playlist_choice), None)
                         add_button_pressed = st.button("Add Song", key=f"add_song_{index}")
@@ -660,7 +713,6 @@ def display_spotify_search_results(search_keyword):
 
             st.markdown("---")
 
-            # Modal content
             if create_modal.is_open():
                 with create_modal.container():
                     st.code(st.session_state.get('sql_command', ''))
@@ -1115,6 +1167,10 @@ if st.session_state.get('authentication_status'):
     elif st.session_state['page'] == 'My Playlists' and st.session_state['user_info']['usertype'] == 'customer':
         show_playlists(st.session_state['user_info']['user_id'])
     elif st.session_state['page'] == 'Search Music' and st.session_state['user_info']['usertype'] == 'customer':
+        st.markdown("""
+        ### Discover and Curate Music
+        Search for tracks, listen to previews, and add your favorites to playlists directly from Spotify's extensive library.
+        """, unsafe_allow_html=True)
         search_keyword = st.text_input("Enter search keyword:", key='spotify_search')
         if search_keyword:
             display_spotify_search_results(search_keyword)
