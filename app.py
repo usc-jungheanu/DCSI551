@@ -548,40 +548,62 @@ def fetch_users_from_db2():
     return []
 
 
+
+
 def user_crud(user_type):
-    st.subheader(f"Manage Users for {user_type.title()}")
-    options = ["Create", "View", "Update", "Delete"]
-    # Append user_type to the key to ensure uniqueness
-    option = st.selectbox("Select Operation", options, key=f"operation_{user_type}")
-    
-    if option == "Create":
-        username = st.text_input("Username", key=f"username_create_{user_type}")
-        email = st.text_input("Email", key=f"email_create_{user_type}")
-        password = st.text_input("Password", type='password', key=f"password_create_{user_type}")
-        if st.button("Create User", key=f"create_user_button_{user_type}"):
-            # Assume create_user is a function to create a user
-            create_user(username, email, password, user_type)
-            st.success(f"User '{username}' created!")
+    st.subheader(f"Manage Users for {user_type.title()}s")
+    users = fetch_users_by_type(user_type)  # Fetch users based on type (customer or admin)
+    user_options = [(user['username'], user['user_id']) for user in users] if users else []
 
-    elif option == "View":
-        with st.spinner("Fetching Users..."):
-            users = fetch_users()
-            st.write(pd.DataFrame(users, columns=['User ID', 'Username', 'Email', 'Role']))
+    # Add a placeholder at the beginning of the list
+    user_display_options = ['Click to view users:'] + [user['username'] for user in users]
+    selected_user = st.selectbox('Current Users:', user_display_options, key=f"display_users_{user_type}")
 
-    elif option == "Update":
-        user_id = st.text_input("User ID to Update", key=f"user_id_update_{user_type}")
-        new_email = st.text_input("New Email", key=f"new_email_update_{user_type}")
-        if st.button("Update User", key=f"update_user_button_{user_type}"):
-            # Assume update_user is a function to update user details
-            update_user(user_id, new_email, user_type)
-            st.success(f"User ID {user_id} updated!")
+    # Fetch and display users
+    if selected_user != 'Click to view users:':
+        user_display_options = [(user['username'], user['user_id']) for user in users]
+        st.selectbox('Current Users:', user_display_options, format_func=lambda x: x[0], key=f"display_users_{user_type}")
+        # st.write(f"Selected User ID: {selected_user_display[1]}")  # Optional: Display selected user details
+
+    operation = st.selectbox('Choose operation', ['Create', 'Update', 'Delete'], key=f"user_operation_{user_type}")
+
     
-    elif option == "Delete":
-        user_id = st.text_input("User ID to Delete", key=f"user_id_delete_{user_type}")
-        if st.button("Delete User", key=f"delete_user_button_{user_type}"):
-            # Assume delete_user is a function to delete a user
-            delete_user(user_id, user_type)
-            st.success(f"User ID {user_id} deleted!")
+    if operation == 'Create':
+        username = st.text_input('Username', key=f"create_username_{user_type}")
+        email = st.text_input('Email', key=f"create_email_{user_type}")
+        password = st.text_input('Password', type='password', key=f"create_password_{user_type}")
+        if st.button('Create User', key=f"create_user_{user_type}"):
+            create_result, sql_command = insert_user(username, password, email, user_type)
+            if create_result:
+                st.success(f"User '{username}' created successfully!")
+                with st.expander("See SQL Command"):
+                    st.code(sql_command)
+            else:
+                st.error("Failed to create user.")
+
+    elif operation == 'Update':
+        user_selection = st.selectbox('Select User to Update', user_options, format_func=lambda x: x[0], key=f"update_select_{user_type}")
+        if user_selection:
+            new_email = st.text_input("New Email for " + user_selection[0], key=f"update_email_{user_type}")
+            if st.button("Update Email", key=f"update_user_{user_type}_{user_selection[1]}"):
+                update_result, sql_command = update_user_email(user_selection[1], new_email, user_type)
+                if update_result:
+                    st.success(f"Email updated for user '{user_selection[0]}'")
+                    with st.expander("See SQL Command"):
+                        st.code(sql_command)
+                else:
+                    st.error("Failed to update user.")
+
+    elif operation == 'Delete':
+        user_selection = st.selectbox('Select User to Delete', user_options, format_func=lambda x: x[0], key=f"delete_select_{user_type}")
+        if user_selection and st.button('Delete User', key=f"delete_user_{user_type}_{user_selection[1]}"):
+            delete_result, sql_command = delete_user(user_selection[1], user_type)
+            if delete_result:
+                st.success(f"User '{user_selection[0]}' deleted successfully!")
+                with st.expander("See SQL Command"):
+                    st.code(sql_command)
+            else:
+                st.error("Failed to delete user.")
 
 
 def fetch_all_users():
@@ -700,35 +722,51 @@ def fetch_users(db_connection):
     finally:
         cursor.close()
 
-def update_user(user_id, email, db_connection):
-    try:
-        cursor = db_connection.cursor()
-        update_query = "UPDATE users SET email = %s WHERE user_id = %s"
-        cursor.execute(update_query, (email, user_id))
-        db_connection.commit()
-        if cursor.rowcount > 0:
-            st.success("User updated successfully!")
-        else:
-            st.warning("No user found with the provided ID.")
-    except mysql.connector.Error as e:
-        st.error(f"Database error: {e}")
-    finally:
-        cursor.close()
+def update_user_email(user_id, new_email, user_type):
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            update_query = "UPDATE users SET email = %s WHERE user_id = %s"
+            cursor.execute(update_query, (new_email, user_id))
+            db_connection.commit()
+            return cursor.rowcount > 0, cursor.statement
+        except mysql.connector.Error as e:
+            return False, f"Database error: {e}"
+        finally:
+            cursor.close()
+            db_connection.close()
 
-def delete_user(user_id, db_connection):
-    try:
-        cursor = db_connection.cursor()
-        delete_query = "DELETE FROM users WHERE user_id = %s"
-        cursor.execute(delete_query, (user_id,))
-        db_connection.commit()
-        if cursor.rowcount > 0:
-            st.success("User deleted successfully!")
-        else:
-            st.warning("No user found with the provided ID.")
-    except mysql.connector.Error as e:
-        st.error(f"Database error: {e}")
-    finally:
-        cursor.close()
+# Fetch user by usertype, admin or customer
+def fetch_users_by_type(user_type):
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT user_id, username FROM users WHERE usertype = %s", (user_type,))
+            return [{'user_id': row[0], 'username': row[1]} for row in cursor.fetchall()]
+        except mysql.connector.Error as e:
+            st.error(f"Database error: {e}")
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        return []
+
+def delete_user(user_id, user_type):
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            delete_query = "DELETE FROM users WHERE user_id = %s"
+            cursor.execute(delete_query, (user_id,))
+            db_connection.commit()
+            return cursor.rowcount > 0, cursor.statement
+        except mysql.connector.Error as e:
+            return False, f"Database error: {e}"
+        finally:
+            cursor.close()
+            db_connection.close()
 
 
 ######## SPOTIFY API CONFIGURATION AND SEARCH FUNCTION IMPLEMENTATION ###########
@@ -1364,13 +1402,10 @@ def create_account():
 
 
 # Function to insert a new user into the correct database based on their email domain
-def insert_user(username, password, email):
-    hashed_password = hash_password(password).decode('utf-8')  # Make sure to hash the password
-    usertype = "admin" if email.endswith("@tunesync.com") else "customer"
+def insert_user(username, password, email, user_type):
+    hashed_password = hash_password(password).decode('utf-8')  # Hash the password
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
 
-    # Decide which database to use based on the user's email domain
-    db_connection = connect_to_mysql_db1() if usertype == "admin" else connect_to_mysql_db2()
-    
     if db_connection is not None:
         try:
             cursor = db_connection.cursor()
@@ -1378,17 +1413,18 @@ def insert_user(username, password, email):
                 INSERT INTO users (username, password, email, usertype, created_at)
                 VALUES (%s, %s, %s, %s, NOW())
             """
-            # Execute the insert operation
+            usertype = 'admin' if user_type == 'admin' else 'customer'
             cursor.execute(insert_query, (username, hashed_password, email, usertype))
-            db_connection.commit()  # Don't forget to commit the transaction
-            return True, f"User created successfully as {usertype}"  # Return success status and message
+            db_connection.commit()
+            sql_command = cursor.statement
+            return True, sql_command  # Return success and the SQL command
         except mysql.connector.Error as e:
-            return False, f"Error inserting user into database: {e}"  # Return failure status and message
+            return False, f"Error inserting user into database: {e}"
         finally:
             cursor.close()
             db_connection.close()
     else:
-        return False, 'Database connection failed.'  # Return failure status and message
+        return False, "Database connection failed" # Return failure status and message
 
 
 
