@@ -157,7 +157,31 @@ def insert_user(username, password, email):
         return False, "Database connection failed."
 
 
-# authenticate user for password reset / forgot password
+# # authenticate user for password reset / forgot password
+# def authenticate_user(username, password):
+#     for db_connection in [connect_to_mysql_db1(), connect_to_mysql_db2()]:
+#         if db_connection:
+#             try:
+#                 cursor = db_connection.cursor()
+#                 cursor.execute("SELECT password, usertype FROM users WHERE username = %s", (username,))
+#                 result = cursor.fetchone()
+#                 if result:
+#                     stored_password, usertype = result
+#                     stored_password = stored_password.encode('utf-8')
+#                     if bcrypt.checkpw(password.encode('utf-8'), stored_password):
+#                         return True, usertype  # Authentication successful, return True and usertype
+#                     else:
+#                         print(f"Password mismatch for user {username}.")
+#                 else:
+#                     print(f"No password found for user {username}.")
+#             except mysql.connector.Error as e:
+#                 print(f"Database error during authentication for user {username}: {e}")
+#             finally:
+#                 cursor.close()
+#                 db_connection.close()
+#     print(f"User {username} not found in any database.")
+#     return False, None  # Authentication failed, return False and None for usertype
+
 def authenticate_user(username, password):
     for db_connection in [connect_to_mysql_db1(), connect_to_mysql_db2()]:
         if db_connection:
@@ -181,6 +205,8 @@ def authenticate_user(username, password):
                 db_connection.close()
     print(f"User {username} not found in any database.")
     return False, None  # Authentication failed, return False and None for usertype
+
+
 
 def user_exists(username):
     for db_connection in [connect_to_mysql_db1(), connect_to_mysql_db2()]:
@@ -238,9 +264,31 @@ def update_user_password(username, new_password):
     return False
 
 
-def fetch_user_info(username):
-    """ Fetch user information from the database. """
-    connection = connect_to_mysql_db2()  # Assuming this function connects to your database
+# def fetch_user_info(username):
+#     """ Fetch user information from the database. """
+#     connection = connect_to_mysql_db2()  # Assuming this function connects to your database
+#     if connection is not None:
+#         try:
+#             cursor = connection.cursor()
+#             cursor.execute("SELECT user_id, username, email, usertype, created_at FROM users WHERE username = %s", (username,))
+#             user_info = cursor.fetchone()
+#             if user_info:
+#                 return {
+#                     "user_id": user_info[0],
+#                     "username": user_info[1],
+#                     "email": user_info[2],
+#                     "usertype": user_info[3],
+#                     "created_at": user_info[4]
+#                 }
+#         except mysql.connector.Error as e:
+#             st.error("Error fetching user info: {}".format(e))
+#         finally:
+#             cursor.close()
+#             connection.close()
+#     return None
+
+
+def fetch_user_info_from_db(connection, username):
     if connection is not None:
         try:
             cursor = connection.cursor()
@@ -255,10 +303,61 @@ def fetch_user_info(username):
                     "created_at": user_info[4]
                 }
         except mysql.connector.Error as e:
-            st.error("Error fetching user info: {}".format(e))
+            st.error("Database error when fetching user info: {}".format(e))
         finally:
             cursor.close()
             connection.close()
+    return None
+
+
+# def fetch_user_info(username):
+#     """ Fetch user information from the appropriate database. """
+#     # First check in db1
+#     connection = connect_to_mysql_db1()
+#     user_info = fetch_user_info_from_db(connection, username)
+#     if user_info is not None:
+#         return user_info
+    
+#     # If not found in db1, check in db2
+#     connection = connect_to_mysql_db2()
+#     return fetch_user_info_from_db(connection, username)
+
+def fetch_user_info(username):
+    if not username:  # Check if username is None or empty
+        return None  # Return None to indicate no user info could be fetched
+
+    # Define a list of database connections to iterate through
+    db_connections = [connect_to_mysql_db1(), connect_to_mysql_db2()]
+
+    for db_connection in db_connections:
+        if db_connection:
+            try:
+                cursor = db_connection.cursor()
+                query = "SELECT user_id, username, email, usertype, created_at FROM users WHERE username = %s"
+                print("Executing query:", query)
+                cursor.execute(query, (username,))
+                result = cursor.fetchone()
+                if result:
+                    user_info = {
+                        'user_id': result[0],  # Make sure to include user_id in your result fetch
+                        'username': result[1],
+                        'email': result[2],
+                        'usertype': result[3],
+                        'created_at': result[4]
+                    }
+                    print("User info fetched successfully:", user_info)
+                    return user_info
+                else:
+                    print("No user found with username:", username)
+            except mysql.connector.Error as e:
+                print(f"Database error when fetching user info: {e}")
+            finally:
+                cursor.close()
+                db_connection.close()
+        else:
+            print("Failed to connect to database.")
+    
+    print("Failed to retrieve user details for username:", username)
     return None
 
 
@@ -308,48 +407,128 @@ def send_password_reset_email(recipient_email, reset_link):
 ############### ADMIN MANAGEMENT ###############################
 
 def manage_playlists_and_users():
-    st.header("Admin Dashboard")
-
-    # Menu for different admin tasks
+    # st.header("Admin Dashboard")
     selected = option_menu(
         menu_title="Admin Operations",
         options=["Manage Playlists", "Manage Users"],
-        icons=["music-note-list", "person-fill"],  # Bootstrap icons
+        icons=["music-note-list", "person-fill"],
         orientation="horizontal",
     )
 
     if selected == "Manage Playlists":
-        playlist_crud()
+        manage_playlists()
     elif selected == "Manage Users":
-        user_crud()
+        manage_users()
 
-def playlist_crud():
-    st.subheader("Manage Playlists")
-    option = st.selectbox("Select Operation", ["Create", "View", "Delete"])
+def manage_playlists():
+    tab1, tab2 = st.tabs(["Customers", "Admins"])
+    with tab1:
+        playlist_crud("customer")
+    with tab2:
+        playlist_crud("admin")
 
-    if option == "Create":
-        playlist_name = st.text_input("Playlist Name")
-        user_id = st.session_state['user_info']['user_id']  # Assuming user_id is stored in session state
-        if st.button("Create Playlist"):
-            db_connection = connect_to_mysql_db1()  # or connect_to_mysql_db2() based on your design
-            create_admin_playlist(playlist_name, user_id, db_connection)
+def manage_users():
+    tab1, tab2 = st.tabs(["Customers", "Admins"])
+    with tab1:
+        user_crud("customer")
+    with tab2:
+        user_crud("admin")
 
-    elif option == "View":
-        db_connection = connect_to_mysql_db1()  # or connect_to_mysql_db2() based on your design
-        if st.button("Fetch Playlists"):
-            playlists = fetch_admin_playlists(db_connection)
+
+def playlist_crud(user_type):
+    st.subheader(f"Manage Playlists for {user_type.title()}s")
+    users = fetch_users_by_type(user_type)  # Fetch users by type (customer or admin)
+    user_options = [(user['username'], user['user_id']) for user in users]
+    selected_user = st.selectbox('Select User', user_options, format_func=lambda x: x[0])
+
+    if selected_user:
+        user_id = selected_user[1]  # Get the user ID from the selection
+        playlists = fetch_playlists_by_user(user_id)  # Fetch playlists for selected user
+
+        operation = st.selectbox('Choose operation', ['Create', 'View', 'Delete'], key=f"{user_type}_operation")
+
+        if operation == 'Create':
+            playlist_name = st.text_input('Playlist Name', key=f"{user_type}_create_playlist_name")
+            if st.button('Create Playlist', key=f"{user_type}_create_playlist_button"):
+                create_result, sql_command = create_playlist(playlist_name, user_id, user_type)
+                if create_result:
+                    st.success('Playlist created!')
+                    with st.expander("See SQL Command"):
+                        st.code(sql_command)
+                else:
+                    st.error("Failed to create playlist.")
+
+        elif operation == 'View':
             if playlists:
-                st.write(pd.DataFrame(playlists, columns=['Playlist ID', 'Playlist Name']))
+                df = pd.DataFrame(playlists, columns=['Playlist ID', 'Playlist Name'])
+                st.write(df.to_html(index=False, escape=False), unsafe_allow_html=True)  # Display dataframe without index
             else:
                 st.write("No playlists found.")
 
-    elif option == "Delete":
-        playlist_id = st.text_input("Playlist ID to Delete")
-        if st.button("Delete Playlist"):
-            db_connection = connect_to_mysql_db1()  # or connect_to_mysql_db2() based on your design
-            delete_admin_playlist(playlist_id, db_connection)
+        elif operation == 'Delete':
+            playlist_options = [(p[1], p[0]) for p in playlists]  # Assuming p[1] is playlist name and p[0] is playlist ID
+            selected_playlist = st.selectbox(
+                'Select Playlist to Delete',
+                playlist_options,
+                format_func=lambda x: x[0],
+                key=f"{user_type}_delete_playlist_select_{selected_user[1]}"  # unique key using user_type and user_id
+            )
+            if st.button('Delete Playlist', key=f"{user_type}_delete_playlist_button_{selected_user[1]}"):
+                delete_result, sql_command = delete_playlist(selected_playlist[1])  # Assuming selected_playlist[1] has the playlist ID
+                if delete_result:
+                    st.success('Playlist deleted!')
+                    with st.expander("See SQL Command"):
+                        st.code(sql_command)
+                else:
+                    st.error("Failed to delete playlist.")
 
-def user_crud():
+def fetch_users_by_type(user_type):
+    if user_type == "admin":
+        return fetch_users_from_db1()  # Fetch from Admin database
+    else:
+        return fetch_users_from_db2() 
+
+
+def fetch_users_from_db1():
+    """Fetch users from the admin database."""
+    db_connection = connect_to_mysql_db1()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT user_id, username FROM users")  # Adjust the query based on your table structure
+            users = [{'user_id': row[0], 'username': row[1]} for row in cursor.fetchall()]
+            return users
+        except mysql.connector.Error as e:
+            st.error(f"Database error: {e}")
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        st.error("Failed to connect to the admin database.")
+    return []
+
+def fetch_users_from_db2():
+    """Fetch users from the customer database."""
+    db_connection = connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT user_id, username FROM users")  # Adjust the query based on your table structure
+            users = [{'user_id': row[0], 'username': row[1]} for row in cursor.fetchall()]
+            return users
+        except mysql.connector.Error as e:
+            st.error(f"Database error: {e}")
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        st.error("Failed to connect to the customer database.")
+    return []
+
+
+
+
+def user_crud(user_type):
     st.subheader("Manage Users")
     option = st.selectbox("Select Operation", ["Create", "View", "Update", "Delete"])
 
@@ -383,18 +562,69 @@ def user_crud():
                 st.success(f"User ID {user_id} deleted!")
 
 
+def fetch_all_users():
+    db_connection = connect_to_mysql_db1()  # Assuming admin operations are in DB1
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT user_id, username FROM users")
+            users = cursor.fetchall()
+            return users  # Returns a list of tuples (user_id, username)
+        except mysql.connector.Error as e:
+            print(f"Error fetching users: {e}")
+        finally:
+            cursor.close()
+            db_connection.close()
+    return []
 
-def create_admin_playlist(playlist_name, user_id, db_connection):
+
+def create_admin_playlist(playlist_name, user_id):
+    db_connection = connect_to_mysql_db1()  # Assuming DB connection function
     try:
         cursor = db_connection.cursor()
         insert_query = "INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)"
         cursor.execute(insert_query, (playlist_name, user_id))
         db_connection.commit()
-        st.success("Playlist created successfully!")
+        return True, cursor.statement  # Return success and the SQL command
     except mysql.connector.Error as e:
         st.error(f"Database error: {e}")
+        return False, ""  # Return failure and empty SQL command
     finally:
         cursor.close()
+        db_connection.close()
+
+
+def fetch_playlists_by_user(user_id):
+    playlists = []  # Initialize an empty list to store playlists from both databases
+
+    # Fetch from the first database (e.g., Admin DB)
+    db_connection = connect_to_mysql_db1()
+    playlists += fetch_playlists_for_user(db_connection, user_id)
+
+    # Fetch from the second database (e.g., Customer DB)
+    db_connection = connect_to_mysql_db2()
+    playlists += fetch_playlists_for_user(db_connection, user_id)
+
+    return playlists
+
+
+def fetch_playlists_for_user(db_connection, user_id):
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            cursor.execute("SELECT playlist_id, playlist_name FROM playlists WHERE user_id = %s", (user_id,))
+            return cursor.fetchall()
+        except mysql.connector.Error as e:
+            print(f"Database error in {db_connection.database}: {e}")
+            return []
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        return []
+
+
+
 
 def fetch_admin_playlists(db_connection):
     try:
@@ -408,20 +638,20 @@ def fetch_admin_playlists(db_connection):
     finally:
         cursor.close()
 
-def delete_admin_playlist(playlist_id, db_connection):
+def delete_admin_playlist(playlist_id):
+    db_connection = connect_to_mysql_db1()
     try:
         cursor = db_connection.cursor()
         delete_query = "DELETE FROM playlists WHERE playlist_id = %s"
         cursor.execute(delete_query, (playlist_id,))
         db_connection.commit()
-        if cursor.rowcount > 0:
-            st.success("Playlist deleted successfully!")
-        else:
-            st.warning("No playlist found with the provided ID.")
+        return cursor.rowcount > 0, cursor.statement  # Return success/failure and the SQL command
     except mysql.connector.Error as e:
         st.error(f"Database error: {e}")
+        return False, ""  # Return failure and empty SQL command
     finally:
         cursor.close()
+        db_connection.close()
 
 def create_user(username, email, password, db_connection):
     try:
@@ -660,30 +890,41 @@ def process_search_results(results):
 
     return pd.DataFrame(data), [track.get('preview_url') for track in results['tracks']['items']]
 
-def create_playlist(playlist_name, user_id):
-    db_connection = connect_to_mysql_db2()
-    if not db_connection:
-        return "Connection to the database failed."
-    
-    try:
-        cursor = db_connection.cursor()
-        insert_query = """
-            INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)
-        """
-        cursor.execute(insert_query, (playlist_name, user_id))
-        db_connection.commit()
+# def create_playlist(playlist_name, user_id, user_type=None):
+#     db_connection = connect_to_mysql_db1() if user_type == 'admin' else connect_to_mysql_db2()
+#     if db_connection:
+#         try:
+#             cursor = db_connection.cursor()
+#             insert_query = "INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)"
+#             cursor.execute(insert_query, (playlist_name, user_id))
+#             db_connection.commit()
+#             # After a successful insert, store the SQL command in session state.
+#             st.session_state['sql_command'] = cursor.statement
+#             return "Playlist created successfully."
+#         except mysql.connector.Error as e:
+#             return f"Database error during playlist creation: {e}"
+#         finally:
+#             cursor.close()
+#             close_mysql_connection(db_connection)
 
-        # After a successful insert, store the SQL command in session state.
-        st.session_state['sql_command'] = cursor.statement
+def create_playlist(playlist_name, user_id, user_type):
+    db_connection = connect_to_mysql_db1() if user_type == "admin" else connect_to_mysql_db2()
+    if db_connection:
+        try:
+            cursor = db_connection.cursor()
+            insert_query = "INSERT INTO playlists (playlist_name, user_id) VALUES (%s, %s)"
+            cursor.execute(insert_query, (playlist_name, user_id))
+            db_connection.commit()
+            return True, "Playlist created successfully."
+        except mysql.connector.Error as e:
+            st.error(f"Database error: {e}")
+            return False, ""  # Return failure and empty SQL command
+        finally:
+            cursor.close()
+            db_connection.close()
+    else:
+        return False, "Failed to connect to database."
 
-        return "Playlist created successfully."
-    except mysql.connector.Error as e:
-        return f"Database error during playlist creation: {e}"
-    except Exception as e:
-        return f"An error occurred: {e}"
-    finally:
-        cursor.close()
-        close_mysql_connection(db_connection)
 
 
 # Function to perform a unified search on Spotify
@@ -738,7 +979,7 @@ def display_spotify_search_results(search_keyword):
                         new_playlist_name = st.text_input("New Playlist Name", key=f"new_playlist_{index}")
                         create_button_pressed = st.button("Create Playlist", key=f"create_playlist_button_{index}")
                         if create_button_pressed and new_playlist_name:
-                            error_message = create_playlist(new_playlist_name, st.session_state['user_info']['user_id'])
+                            error_message = create_playlist(new_playlist_name, st.session_state['user_info']['user_id'], 'customer')
                             if error_message == "Playlist created successfully.":
                                 st.success(error_message)
                                 st.session_state['sql_command'] = f"INSERT INTO playlists (playlist_name, user_id) VALUES ('{new_playlist_name}', '{st.session_state['user_info']['user_id']}');"
@@ -897,18 +1138,18 @@ def delete_playlist(playlist_id):
             # Delete all songs from this playlist first
             delete_songs_query = f"DELETE FROM songs WHERE playlist_id = {playlist_id};"
             cursor.execute(delete_songs_query)
-            sql_commands += "Executed: " + delete_songs_query + "\n"
+            sql_commands += "" + delete_songs_query + "\n"
 
             # Now, delete the playlist itself
             delete_playlist_query = f"DELETE FROM playlists WHERE playlist_id = {playlist_id};"
             cursor.execute(delete_playlist_query)
-            sql_commands += "Executed: " + delete_playlist_query
+            sql_commands += "" + delete_playlist_query
 
             db_connection.commit()
             cursor.close()
             db_connection.close()
 
-            return sql_commands
+            return True, sql_commands
 
         except mysql.connector.Error as e:
             st.error(f"Database error: {e}")
@@ -1166,8 +1407,6 @@ def reset_password():
                 st.error("Invalid username or reset token.")
 
 
-
-# Function to handle login
 def login_user():
     with st.form(key='login_form_unique'):
         username = st.text_input("Username")
@@ -1176,23 +1415,48 @@ def login_user():
         if submit_button:
             authenticated, usertype = authenticate_user(username, password)
             if authenticated:
+                # print(f"User {username} authenticated as {usertype} from {db_key}")
                 user_info = fetch_user_info(username)
                 if user_info:
-                    # Store user information in the session state
                     st.session_state['authentication_status'] = True
                     st.session_state['user_info'] = user_info
                     st.success("Login successful!")
-                    # Redirect the user based on UserType
-                    if usertype == 'admin':
-                        # Redirect to admin interface
-                        st.rerun()  # Rerun the app which will now detect the user as logged in
-                    else:
-                        # Redirect to customer interface
-                        st.rerun()  # Rerun the app which will now detect the user as logged in
+                    st.experimental_rerun()
                 else:
-                    st.error("Failed to retrieve user details.")
+                    st.error("Failed to retrieve user details after authentication.")
             else:
                 st.error("Invalid username or password.")
+
+
+
+
+
+# # Function to handle login
+# def login_user():
+#     with st.form(key='login_form_unique'):
+#         username = st.text_input("Username")
+#         password = st.text_input("Password", type="password")
+#         submit_button = st.form_submit_button("Login")
+#         if submit_button:
+#             authenticated, usertype = authenticate_user(username, password)
+#             if authenticated:
+#                 user_info = fetch_user_info(username)
+#                 if user_info:
+#                     # Store user information in the session state
+#                     st.session_state['authentication_status'] = True
+#                     st.session_state['user_info'] = user_info
+#                     st.success("Login successful!")
+#                     # Redirect the user based on UserType
+#                     if usertype == 'admin':
+#                         # Redirect to admin interface
+#                         st.rerun()  # Rerun the app which will now detect the user as logged in
+#                     else:
+#                         # Redirect to customer interface
+#                         st.rerun()  # Rerun the app which will now detect the user as logged in
+#                 else:
+#                     st.error("Failed to retrieve user details.")
+#             else:
+#                 st.error("Invalid username or password.")
 
 
 
@@ -1220,7 +1484,7 @@ def render_sidebar():
 
             # Admin tools
             if usertype == 'admin':
-                options = ["Homepage", "Manage Playlists", "Profile", "Logout"]
+                options = ["Homepage", "Systems", "Profile", "Logout"]
             # User features
             elif usertype == 'customer':
                 options = ["Homepage", "My Playlists", "Search Music", "Profile", "Logout"]
@@ -1249,7 +1513,7 @@ render_sidebar()
 if st.session_state.get('authentication_status'):
     if st.session_state['page'] == 'Homepage':
         show_homepage()
-    if st.session_state['page'] == 'Manage Playlists' and st.session_state['user_info']['usertype'] == 'admin':
+    if st.session_state['page'] == 'Systems' and st.session_state['user_info']['usertype'] == 'admin':
         manage_playlists_and_users()
         pass
     # elif st.session_state['page'] == 'Systems' and st.session_state['user_info']['usertype'] == 'admin':
