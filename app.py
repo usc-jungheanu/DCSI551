@@ -728,10 +728,6 @@ def show_playlists(user_id):
     playlists = get_playlists_from_db(user_id)
     selected_playlist_name = st.selectbox('Select a playlist:', [playlist[1] for playlist in playlists])
 
-    # Initialize modals outside the loop to ensure they are accessible
-    remove_modal = None
-    delete_modal = Modal("SQL for Deleting Playlist", key=f"delete_playlist_modal")
-
     if selected_playlist_name:
         selected_playlist_id = next(playlist[0] for playlist in playlists if playlist[1] == selected_playlist_name)
         songs = get_songs_from_playlist(selected_playlist_id)
@@ -748,14 +744,14 @@ def show_playlists(user_id):
                 if preview_url:
                     st.audio(preview_url)
             with col3:
-                # Define a unique key for each modal based on song ID
-                remove_modal_key = f"remove_song_modal_{song_id}"
-                remove_modal = Modal("SQL for Song Removal", key=remove_modal_key)
                 if st.button("Remove", key=f"remove_{song_id}"):
                     sql_command, success = remove_song_from_playlist(song_id, selected_playlist_id)
                     if success:
-                        st.session_state['sql_command'] = sql_command
-                        remove_modal.open()
+                        with st.popover("See SQL"):
+                            st.code(sql_command)
+                        st.success("Song removed successfully!")
+                    else:
+                        st.error("Failed to remove song.")
 
             st.markdown("---")  # Adds a horizontal line after each song
 
@@ -764,13 +760,6 @@ def show_playlists(user_id):
             with st.expander("See SQL"):
                 st.code(sql_command)
 
-    # Render modals outside the loop or conditional blocks
-    if remove_modal and remove_modal.is_open():
-        with remove_modal.container():
-            st.code(st.session_state.get('sql_command', ''))
-    if delete_modal.is_open():
-        with delete_modal.container():
-            st.code(st.session_state.get('sql_command', ''))
 
 
 def update_song_in_db(song_id, new_name, new_artist, new_album, new_release_date):
