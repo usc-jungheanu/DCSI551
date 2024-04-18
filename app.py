@@ -35,6 +35,10 @@ def modify_song(song_id):
     st.session_state[f'modify_{song_id}'] = True
 
 
+def display_user_type(user_type):
+    return "Subscriber" if user_type == "customer" else user_type.title()
+
+
 ##################   DATABASE SETUP & MANAGEMENT   ########################
 
 
@@ -348,7 +352,7 @@ def show_profile():
         # Displaying user information
         st.subheader(f"Username: {user_info['username']}")
         st.text(f"Email: {user_info['email']}")
-        st.text(f"Account Type: {user_info['usertype']}")
+        st.text(f"Account Type: {display_user_type(user_info['usertype'])}")
         st.text(f"User ID: {user_info['user_id']}")
         st.text(f"Created On: {user_info['created_at']}")
 
@@ -396,14 +400,14 @@ def manage_playlists_and_users():
         manage_users()
 
 def manage_playlists():
-    tab1, tab2 = st.tabs(["Customers", "Admins"])
+    tab1, tab2 = st.tabs(["Subscriber", "Admins"])
     with tab1:
         playlist_crud("customer")
     with tab2:
         playlist_crud("admin")
 
 def manage_users():
-    tab1, tab2 = st.tabs(["Customers", "Admins"])
+    tab1, tab2 = st.tabs(["Subscriber", "Admins"])
     with tab1:
         user_crud("customer")
     with tab2:
@@ -429,7 +433,7 @@ def create_playlist_admin(playlist_name, user_id, user_type):
 
 
 def playlist_crud(user_type):
-    st.subheader(f"Manage Playlists for {user_type.title()}s")
+    st.subheader(f"Manage Playlists for {display_user_type(user_type)}s")
     users = fetch_users_by_type(user_type)  # Fetch users by type (customer or admin)
     user_options = [(user['username'], user['user_id']) for user in users]
     selected_user = st.selectbox('Select User', user_options, format_func=lambda x: x[0])
@@ -526,7 +530,7 @@ def fetch_users_from_db2():
 
 
 def user_crud(user_type):
-    st.subheader(f"Manage Users for {user_type.title()}s")
+    st.subheader(f"Manage Users for {display_user_type(user_type)}s")
     users = fetch_users_by_type(user_type)  # Fetch users based on type (customer or admin)
     user_options = [(user['username'], user['user_id']) for user in users] if users else []
 
