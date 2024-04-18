@@ -157,6 +157,31 @@ def insert_user(username, password, email):
         return False, "Database connection failed."
 
 
+# # authenticate user for password reset / forgot password
+# def authenticate_user(username, password):
+#     for db_connection in [connect_to_mysql_db1(), connect_to_mysql_db2()]:
+#         if db_connection:
+#             try:
+#                 cursor = db_connection.cursor()
+#                 cursor.execute("SELECT password, usertype FROM users WHERE username = %s", (username,))
+#                 result = cursor.fetchone()
+#                 if result:
+#                     stored_password, usertype = result
+#                     stored_password = stored_password.encode('utf-8')
+#                     if bcrypt.checkpw(password.encode('utf-8'), stored_password):
+#                         return True, usertype  # Authentication successful, return True and usertype
+#                     else:
+#                         print(f"Password mismatch for user {username}.")
+#                 else:
+#                     print(f"No password found for user {username}.")
+#             except mysql.connector.Error as e:
+#                 print(f"Database error during authentication for user {username}: {e}")
+#             finally:
+#                 cursor.close()
+#                 db_connection.close()
+#     print(f"User {username} not found in any database.")
+#     return False, None  # Authentication failed, return False and None for usertype
+
 def authenticate_user(username, password):
     for db_connection in [connect_to_mysql_db1(), connect_to_mysql_db2()]:
         if db_connection:
@@ -530,18 +555,15 @@ def user_crud(user_type):
     users = fetch_users_by_type(user_type)  # Fetch users based on type (customer or admin)
     user_options = [(user['username'], user['user_id']) for user in users] if users else []
 
-    info = st.popover("See Users:")
-    # Prepare an HTML string to represent the table
-    table_html = "<table style='width:100%; border: 1px solid black;'>"
-    table_html += "<tr><th>Username</th><th>User ID</th></tr>"
+    # Add a placeholder at the beginning of the list
+    user_display_options = ['Click to view users:'] + [user['username'] for user in users]
+    selected_user = st.selectbox('Current Users:', user_display_options, key=f"display_users_{user_type}")
 
-    for user in users:
-        table_html += f"<tr><td>{user['username']}</td><td>{user['user_id']}</td></tr>"
-
-    table_html += "</table>"
-
-    # Inside the popover, display the HTML table using markdown to parse HTML
-    info.markdown(table_html, unsafe_allow_html=True)
+    # Fetch and display users
+    if selected_user != 'Click to view users:':
+        user_display_options = [(user['username'], user['user_id']) for user in users]
+        st.selectbox('Current Users:', user_display_options, format_func=lambda x: x[0], key=f"display_users_{user_type}")
+        # st.write(f"Selected User ID: {selected_user_display[1]}")  # Optional: Display selected user details
 
     operation = st.selectbox('Choose operation', ['Create', 'Update', 'Delete'], key=f"user_operation_{user_type}")
 
@@ -1463,6 +1485,39 @@ def login_user():
                     st.error("Failed to retrieve user details after authentication.")
             else:
                 st.error("Invalid username or password.")
+
+
+
+
+
+# # Function to handle login
+# def login_user():
+#     with st.form(key='login_form_unique'):
+#         username = st.text_input("Username")
+#         password = st.text_input("Password", type="password")
+#         submit_button = st.form_submit_button("Login")
+#         if submit_button:
+#             authenticated, usertype = authenticate_user(username, password)
+#             if authenticated:
+#                 user_info = fetch_user_info(username)
+#                 if user_info:
+#                     # Store user information in the session state
+#                     st.session_state['authentication_status'] = True
+#                     st.session_state['user_info'] = user_info
+#                     st.success("Login successful!")
+#                     # Redirect the user based on UserType
+#                     if usertype == 'admin':
+#                         # Redirect to admin interface
+#                         st.rerun()  # Rerun the app which will now detect the user as logged in
+#                     else:
+#                         # Redirect to customer interface
+#                         st.rerun()  # Rerun the app which will now detect the user as logged in
+#                 else:
+#                     st.error("Failed to retrieve user details.")
+#             else:
+#                 st.error("Invalid username or password.")
+
+
 
 
 # Initialize session state variables if they don't exist.
