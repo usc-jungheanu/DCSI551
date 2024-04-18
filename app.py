@@ -834,7 +834,7 @@ def show_homepage():
     # Setup for "Today's Top Hits"
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f"<h3 style='font-size: 22px;'>Today's Top Hits ({listener_count_today_hits} Active Users)</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='font-size: 22px;'>Today's Top Hits ({listener_count_today_hits} Active Listeners)</h3>", unsafe_allow_html=True)
 
         todays_top_hits_html = get_spotify_embed_html('37i9dQZF1DXcBWIGoYBM5M')
         st.markdown(todays_top_hits_html, unsafe_allow_html=True)
@@ -856,7 +856,7 @@ def show_homepage():
     # Setup for "New Music Playlist"
     col3, col4 = st.columns(2)
     with col3:
-        st.markdown(f"<h3 style='font-size: 22px;'>New Music Playlist ({listener_count_new_music} Active Users)</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='font-size: 22px;'>New Music Playlist ({listener_count_new_music} Active Listeners)</h3>", unsafe_allow_html=True)
         new_music_playlist_html = get_spotify_embed_html('37i9dQZF1DX4JAvHpjipBk')
         st.markdown(new_music_playlist_html, unsafe_allow_html=True)
 
