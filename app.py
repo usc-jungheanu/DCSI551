@@ -352,7 +352,7 @@ def show_profile():
         # Displaying user information
         st.subheader(f"Username: {user_info['username']}")
         st.text(f"Email: {user_info['email']}")
-        st.text(f"Account Type: {display_user_type(user_info['usertype'])}")
+        st.text(f"Account Type: {user_info['usertype']}")
         st.text(f"User ID: {user_info['user_id']}")
         st.text(f"Created On: {user_info['created_at']}")
 
