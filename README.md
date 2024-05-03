@@ -40,10 +40,11 @@ streamlit run app.py
 This will start the Streamlit server, and you should be able to access the web application by navigating to http://localhost:8501 in your web browser.
  
 App Structure:
-/app.py: The main Python script to run the Streamlit app.
-/modules: Contains Python scripts for different functionalities (authentication, database operations, Spotify API integration).
-/static: Holds static files like images and CSS files used in the app.
-/templates: Contains HTML templates for email messages or other templates needed in the app.
+
+app.py: The main Python script to run the Streamlit app.
+
+modules: Contains Python scripts for different functionalities (authentication, database operations, Spotify API integration).
+
 
 Database Schema:
 Refer to schema.sql for details on the database schema used for user and playlist management.
