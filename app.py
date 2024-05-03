@@ -102,7 +102,7 @@ def hash_email(email):
         else:
             return 'db2'
     else:
-        return None  # Handle the case where the email format is incorrect
+        return None  
 
 
 # # Function to insert a new user into the correct database based on their email domain
