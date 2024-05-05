@@ -1,0 +1,14 @@
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import concurrent.futures
+
+# Spotify Credentials
+client_id = 'ee25b9c5e4fb4221a09e60fe877e63a2'
+client_secret = '33be200e61ad4caa9fa61b8331c00421'
+
+# Initialize Spotipy with user credentials
+sp = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id, client_secret))
+
+# Playlist ID for Spotify's "Today's Top Hits"
+todays_top_hits_id = '37i9dQZF1DXcBWIGoYBM5M' 
+new_music_playlist_id = '37i9dQZF1DX4JAvHpjipBk'

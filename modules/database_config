@@ -1,0 +1,48 @@
+import mysql.connector
+import bcrypt
+
+# MySQL Connection for DB1 "TuneSyncAdmin":
+def connect_to_mysql_db1():
+    try:
+        db1_connection = mysql.connector.connect(
+            host="database-1.cj26uo6s41hg.us-west-2.rds.amazonaws.com", 
+            user="admin",
+            password="RusticRatio60090",
+            database="TuneSyncAdmin",  
+            port= 3306
+        )
+        if db1_connection.is_connected():
+            # st.write("Successfully connected to MySQL database DB1")
+            # You can perform database operations here using db1_connection
+            return db1_connection
+    except mysql.connector.Error as e:
+        # st.write(f"Error connecting to MySQL database DB1: {e}")
+        return None
+    
+
+# MySQL Connection for DB2 "TuneSyncCustomers":
+def connect_to_mysql_db2():
+    try:
+        db2_connection = mysql.connector.connect(
+            host="database-1.cj26uo6s41hg.us-west-2.rds.amazonaws.com", 
+            user="admin",
+            password="RusticRatio60090",
+            database="TuneSyncCustomers",  
+            port= 3306
+        )
+        if db2_connection.is_connected():
+            # st.write("Successfully connected to MySQL database DB2")
+            # You can perform database operations here using db1_connection
+            return db2_connection
+    except mysql.connector.Error as e:
+        st.write(f"Error connecting to MySQL database DB2: {e}")
+        return None
+    
+# Ensure to close the MySQL connections when done
+def close_mysql_connection(connection):
+    if connection is not None and connection.is_connected():
+        connection.close()
+        # st.write("MySQL connection is closed")
+
+def hash_password(password):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
